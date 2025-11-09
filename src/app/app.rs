@@ -26,6 +26,7 @@ pub enum Focus {
 /// Represents the messages that can be sent to the update function.
 pub enum Message {
     Quit,
+    ForceQuit,
     SwitchToNoteList,
     SwitchToCalendar,
     SwitchToTasks,
@@ -50,6 +51,11 @@ pub enum Message {
     NextTag,
     SelectTag,
     NewLine,
+    PreviousTask,
+    NextTask,
+    ToggleTaskComplete,
+    NewTask,
+    DeleteTask,
     CursorLeft,
     CursorRight,
     CursorUp,
@@ -204,6 +210,13 @@ impl App {
         self.state.tags = tags;
     }
 
+    /// Saves the tasks to disk and updates the status message on failure.
+    fn save_tasks(&mut self) {
+        if let Err(e) = self.data_handler.save_tasks(&self.state.tasks) {
+            self.state.status_message = format!("Error auto-saving tasks: {}", e);
+        }
+    }
+
     fn handle_events(&self) -> Result<Option<Message>> {
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
@@ -257,6 +270,13 @@ impl App {
                             KeyCode::Enter => Ok(Some(Message::ExecuteCommand)),
                             KeyCode::Char(c) => Ok(Some(Message::Char(c))),
                             KeyCode::Backspace => Ok(Some(Message::Backspace)),
+                            _ => Ok(None),
+                        };
+                    }
+                    Mode::ConfirmQuit => {
+                        return match key.code {
+                            KeyCode::Char('y') => Ok(Some(Message::ForceQuit)),
+                            KeyCode::Char('n') | KeyCode::Esc => Ok(Some(Message::EnterNormalMode)),
                             _ => Ok(None),
                         };
                     }
@@ -326,6 +346,14 @@ impl App {
                         KeyCode::Right => return Ok(Some(Message::NextMonth)),
                         _ => {}
                     },
+                    View::Tasks => match key.code {
+                        KeyCode::Char('j') | KeyCode::Down => return Ok(Some(Message::NextTask)),
+                        KeyCode::Char('k') | KeyCode::Up => return Ok(Some(Message::PreviousTask)),
+                        KeyCode::Char('a') => return Ok(Some(Message::NewTask)),
+                        KeyCode::Char('d') => return Ok(Some(Message::DeleteTask)),
+                        KeyCode::Char(' ') => return Ok(Some(Message::ToggleTaskComplete)),
+                        _ => {}
+                    },
                     _ => {}
                 }
 
@@ -349,6 +377,15 @@ impl App {
     fn update(&mut self, message: Message) {
         match message {
             Message::Quit => {
+                if self.state.dirty {
+                    self.state.mode = Mode::ConfirmQuit;
+                    self.state.status_message =
+                        "You have unsaved changes. Quit without saving? (y/n)".to_string();
+                } else {
+                    self.state.running = false;
+                }
+            }
+            Message::ForceQuit => {
                 self.state.running = false;
             }
             Message::SwitchToNoteList => self.state.current_view = View::NoteList,
@@ -372,23 +409,12 @@ impl App {
             }
             Message::Save => {
                 if self.state.dirty {
-                    let notes_result = self.data_handler.save_notes(&self.state.notes);
-                    let tasks_result = self.data_handler.save_tasks(&self.state.tasks);
-
-                    let mut errors = vec![];
-                    if let Err(e) = notes_result {
-                        errors.push(format!("notes ({})", e));
-                    }
-                    if let Err(e) = tasks_result {
-                        errors.push(format!("tasks ({})", e));
-                    }
-
-                    if errors.is_empty() {
-                        self.state.status_message = "Saved successfully!".to_string();
+                    if let Err(e) = self.data_handler.save_notes(&self.state.notes) {
+                        self.state.status_message = format!("Error saving notes: {}", e);
+                    } else {
+                        self.state.status_message = "Notes saved successfully!".to_string();
                         self.state.dirty = false;
                         self.update_tags();
-                    } else {
-                        self.state.status_message = format!("Error saving {}.", errors.join(", "));
                     }
                 } else {
                     self.state.status_message = "No changes to save.".to_string();
@@ -477,6 +503,7 @@ impl App {
                     }
                 }
                 Mode::ConfirmDeletion => {}
+                Mode::ConfirmQuit => {}
             },
             Message::Backspace => match self.state.mode {
                 Mode::Insert => {
@@ -522,6 +549,7 @@ impl App {
                     }
                 }
                 Mode::ConfirmDeletion => {}
+                Mode::ConfirmQuit => {}
             },
             Message::EnterSearch => {
                 self.state.current_view = View::Search;
@@ -570,6 +598,12 @@ impl App {
                 self.state.command_input.clear();
                 self.state.status_message = "New note title: ".to_string();
             }
+            Message::NewTask => {
+                self.state.task_list_state.select(None);
+                self.state.mode = Mode::TitleInput;
+                self.state.command_input.clear();
+                self.state.status_message = "New Task: ".to_string();
+            }
             Message::RenameNote => {
                 if let Some(index) = self.state.note_list_state.selected() {
                     if let Some(note) = self.state.notes.get(index) {
@@ -581,48 +615,74 @@ impl App {
                 }
             }
             Message::SetNoteTitle => {
-                let new_title = self.state.command_input.clone();
-                if new_title.is_empty() {
-                    self.state.status_message = "Title cannot be empty".to_string();
+                let input = self.state.command_input.clone();
+                if input.is_empty() {
+                    self.state.status_message = "Input cannot be empty".to_string();
                     self.state.mode = Mode::Normal;
                     return;
                 }
 
-                if let Some(index) = self.state.note_list_state.selected() {
-                    // This is a rename of an existing note
-                    if let Some(note) = self.state.notes.get_mut(index) {
-                        note.title = new_title;
-                        self.state.dirty = true;
-                    }
-                } else {
-                    // This is a new note
-                    let timestamp = Utc::now().timestamp();
-                    // A more robust path generation
-                    let safe_title: String = new_title
-                        .chars()
-                        .filter(|c| c.is_alphanumeric() || *c == ' ')
-                        .collect::<String>()
-                        .replace(' ', "_");
-                    let path = self
-                        .data_handler
-                        .notes_dir
-                        .join(format!("{}_{}.md", safe_title, timestamp));
-                    let new_note = Note {
-                        path,
-                        title: new_title,
-                        content: String::new(),
-                        tags: vec![],
-                        created_at: Utc::now(),
-                        updated_at: Utc::now(),
-                    };
+                match self.state.current_view {
+                    View::NoteList | View::NoteEditor => {
+                        let new_title = input;
+                        if let Some(index) = self.state.note_list_state.selected() {
+                            // This is a rename of an existing note
+                            if let Some(note) = self.state.notes.get_mut(index) {
+                                note.title = new_title;
+                                self.state.dirty = true;
+                            }
+                        } else {
+                            // This is a new note
+                            let timestamp = Utc::now().timestamp();
+                            // A more robust path generation
+                            let safe_title: String = new_title
+                                .chars()
+                                .filter(|c| c.is_alphanumeric() || *c == ' ')
+                                .collect::<String>()
+                                .replace(' ', "_");
+                            let path = self
+                                .data_handler
+                                .notes_dir
+                                .join(format!("{}_{}.md", safe_title, timestamp));
+                            let new_note = Note {
+                                path,
+                                title: new_title,
+                                content: String::new(),
+                                tags: vec![],
+                                created_at: Utc::now(),
+                                updated_at: Utc::now(),
+                            };
 
-                    self.state.notes.push(new_note);
-                    let new_note_index = self.state.notes.len() - 1;
-                    self.state.note_list_state.select(Some(new_note_index));
-                    self.state.current_view = View::NoteEditor;
-                    self.state.mode = Mode::Insert;
-                    self.state.status_message = "-- INSERT --".to_string();
-                    return; // Skip returning to normal mode
+                            self.state.notes.push(new_note);
+                            let new_note_index = self.state.notes.len() - 1;
+                            self.state.note_list_state.select(Some(new_note_index));
+                            self.state.current_view = View::NoteEditor;
+                            self.state.mode = Mode::Insert;
+                            self.state.status_message = "-- INSERT --".to_string();
+                            return; // Skip returning to normal mode
+                        }
+                    }
+                    View::Tasks => {
+                        let description = input;
+                        // For tasks, we only handle creation for now.
+                        if self.state.task_list_state.selected().is_none() {
+                            let new_task = crate::app::state::Task {
+                                id: (self.state.tasks.len() + 1) as u64, // simplified ID
+                                description,
+                                project: None,
+                                priority: crate::app::state::Priority::Medium,
+                                due_date: None,
+                                completed: false,
+                                created_at: Utc::now(),
+                                sub_tasks: vec![],
+                            };
+                            self.state.tasks.push(new_task);
+                            let new_index = self.state.tasks.len() - 1;
+                            self.state.task_list_state.select(Some(new_index));
+                            self.save_tasks();
+                        }
+                    }
+                    _ => {}
                 }
                 self.update(Message::EnterNormalMode);
             }
@@ -634,25 +694,54 @@ impl App {
                     }
                 }
             }
+            Message::DeleteTask => {
+                if let Some(index) = self.state.task_list_state.selected() {
+                    if let Some(task) = self.state.tasks.get(index) {
+                        self.state.mode = Mode::ConfirmDeletion;
+                        self.state.status_message = format!("Delete '{}'? (y/n)", task.description);
+                    }
+                }
+            }
             Message::ConfirmDelete => {
-                if let Some(index) = self.state.note_list_state.selected() {
-                    let note_to_delete = &self.state.notes[index].clone();
-                    if let Err(e) = self.data_handler.delete_note(note_to_delete) {
-                        self.state.status_message = format!("Error deleting note: {}", e);
-                    } else {
-                        self.state.notes.remove(index);
-                        self.state.dirty = true; // The list of notes has changed
-                        self.state.status_message = format!("'{}' deleted.", note_to_delete.title);
+                match self.state.current_view {
+                    View::NoteList => {
+                        if let Some(index) = self.state.note_list_state.selected() {
+                            let note_to_delete = &self.state.notes[index].clone();
+                            if let Err(e) = self.data_handler.delete_note(note_to_delete) {
+                                self.state.status_message = format!("Error deleting note: {}", e);
+                            } else {
+                                self.state.notes.remove(index);
+                                self.state.dirty = true; // The list of notes has changed
+                                self.state.status_message =
+                                    format!("'{}' deleted.", note_to_delete.title);
 
-                        if self.state.notes.is_empty() {
-                            self.state.note_list_state.select(None);
-                        } else if index >= self.state.notes.len() {
-                            // if it was the last one, select the new last one
-                            self.state
-                                .note_list_state
-                                .select(Some(self.state.notes.len() - 1));
+                                if self.state.notes.is_empty() {
+                                    self.state.note_list_state.select(None);
+                                } else if index >= self.state.notes.len() {
+                                    self.state
+                                        .note_list_state
+                                        .select(Some(self.state.notes.len() - 1));
+                                }
+                            }
                         }
                     }
+                    View::Tasks => {
+                        if let Some(index) = self.state.task_list_state.selected() {
+                            let removed_task = self.state.tasks.remove(index);
+                            self.state.status_message =
+                                format!("'{}' deleted.", removed_task.description);
+                            self.save_tasks();
+
+                            if self.state.tasks.is_empty() {
+                                self.state.task_list_state.select(None);
+                            } else if index >= self.state.tasks.len() {
+                                self.state
+                                    .task_list_state
+                                    .select(Some(self.state.tasks.len() - 1));
+                            }
+                        }
+                    }
+                    _ => {}
                 }
                 self.update(Message::EnterNormalMode);
             }
@@ -824,6 +913,36 @@ impl App {
                             self.state.cursor_offset =
                                 next_line_start + current_col.min(next_line_len);
                         }
+                    }
+                }
+            }
+            Message::PreviousTask => {
+                if !self.state.tasks.is_empty() {
+                    let i = self.state.task_list_state.selected().unwrap_or(0);
+                    let new_i = if i == 0 {
+                        self.state.tasks.len() - 1
+                    } else {
+                        i - 1
+                    };
+                    self.state.task_list_state.select(Some(new_i));
+                }
+            }
+            Message::NextTask => {
+                if !self.state.tasks.is_empty() {
+                    let i = self.state.task_list_state.selected().unwrap_or(0);
+                    let new_i = if i >= self.state.tasks.len() - 1 {
+                        0
+                    } else {
+                        i + 1
+                    };
+                    self.state.task_list_state.select(Some(new_i));
+                }
+            }
+            Message::ToggleTaskComplete => {
+                if let Some(index) = self.state.task_list_state.selected() {
+                    if let Some(task) = self.state.tasks.get_mut(index) {
+                        task.completed = !task.completed;
+                        self.save_tasks();
                     }
                 }
             }

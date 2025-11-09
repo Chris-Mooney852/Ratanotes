@@ -90,7 +90,7 @@ pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>)
             let task_list = TaskListWidget {
                 tasks: &app.state.tasks,
             };
-            frame.render_widget(task_list, content_area);
+            frame.render_stateful_widget(task_list, content_area, &mut app.state.task_list_state);
         }
         super::state::View::Search => {
             let search_results: Vec<ListItem> = app

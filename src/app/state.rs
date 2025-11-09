@@ -54,6 +54,7 @@ pub enum Mode {
     TitleInput,
     ConfirmDeletion,
     TagInput,
+    ConfirmQuit,
 }
 
 /// The main application state.
@@ -76,6 +77,7 @@ pub struct AppState {
     pub tag_list_state: ListState,
     pub active_tag: Option<String>,
     pub cursor_offset: usize,
+    pub task_list_state: ListState,
 }
 
 impl AppState {
@@ -137,6 +139,11 @@ impl AppState {
 
         let tag_list_state = ListState::default();
 
+        let mut task_list_state = ListState::default();
+        if !sample_tasks.is_empty() {
+            task_list_state.select(Some(0));
+        }
+
         Self {
             notes,
             tasks: sample_tasks,
@@ -156,6 +163,7 @@ impl AppState {
             tag_list_state,
             active_tag: None,
             cursor_offset: 0,
+            task_list_state,
         }
     }
 }
