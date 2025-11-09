@@ -14,7 +14,7 @@ pub struct TaskEditorWidget<'a> {
 
 impl<'a> Widget for TaskEditorWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup_area = centered_rect(60, 25, area);
+        let popup_area = centered_rect(60, 30, area);
 
         // Clear the area behind the popup before rendering
         Clear.render(popup_area, buf);
@@ -27,7 +27,14 @@ impl<'a> Widget for TaskEditorWidget<'a> {
         let editor_layout = Layout::default()
             .direction(Direction::Vertical)
             .margin(1)
-            .constraints([Constraint::Length(3), Constraint::Length(3)].as_ref())
+            .constraints(
+                [
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                ]
+                .as_ref(),
+            )
             .split(block.inner(popup_area));
 
         block.render(popup_area, buf);
@@ -65,6 +72,30 @@ impl<'a> Widget for TaskEditorWidget<'a> {
                     .border_style(priority_border_style),
             );
         priority_p.render(editor_layout[1], buf);
+
+        // -- Due Date Field --
+        let due_date_border_style = if let TaskEditFocus::DueDate = self.focus {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default()
+        };
+
+        let due_date_text = if let TaskEditFocus::DueDate = self.focus {
+            self.edit_buffer.to_string()
+        } else {
+            self.task
+                .due_date
+                .map(|d| d.format("%Y-%m-%d").to_string())
+                .unwrap_or_else(|| "".to_string())
+        };
+
+        let due_date_p = Paragraph::new(due_date_text).block(
+            Block::default()
+                .title("Due Date (YYYY-MM-DD)")
+                .borders(Borders::ALL)
+                .border_style(due_date_border_style),
+        );
+        due_date_p.render(editor_layout[2], buf);
     }
 }
 

@@ -62,6 +62,7 @@ pub enum Mode {
 pub enum TaskEditFocus {
     Description,
     Priority,
+    DueDate,
 }
 
 /// The main application state.

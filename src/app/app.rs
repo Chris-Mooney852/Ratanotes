@@ -1,7 +1,7 @@
 use crate::app::state::{AppState, Mode, Note, View};
 use crate::app::ui::ui;
 use crate::utils::data_handler::DataHandler;
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
@@ -301,6 +301,13 @@ impl App {
                                 KeyCode::Right => Ok(Some(Message::CyclePriorityForward)),
                                 _ => Ok(None),
                             },
+                            crate::app::state::TaskEditFocus::DueDate => match key.code {
+                                KeyCode::Esc => Ok(Some(Message::ExitEditTask)),
+                                KeyCode::Tab => Ok(Some(Message::SwitchTaskEditFocus)),
+                                KeyCode::Char(c) => Ok(Some(Message::Char(c))),
+                                KeyCode::Backspace => Ok(Some(Message::Backspace)),
+                                _ => Ok(None),
+                            },
                         };
                     }
                     Mode::Normal => {
@@ -529,8 +536,8 @@ impl App {
                 Mode::ConfirmDeletion => {}
                 Mode::ConfirmQuit => {}
                 Mode::EditTask => {
-                    if let crate::app::state::TaskEditFocus::Description =
-                        self.state.task_edit_focus
+                    if let crate::app::state::TaskEditFocus::Description
+                    | crate::app::state::TaskEditFocus::DueDate = self.state.task_edit_focus
                     {
                         self.state.task_edit_buffer.push(c);
                     }
@@ -582,8 +589,8 @@ impl App {
                 Mode::ConfirmDeletion => {}
                 Mode::ConfirmQuit => {}
                 Mode::EditTask => {
-                    if let crate::app::state::TaskEditFocus::Description =
-                        self.state.task_edit_focus
+                    if let crate::app::state::TaskEditFocus::Description
+                    | crate::app::state::TaskEditFocus::DueDate = self.state.task_edit_focus
                     {
                         self.state.task_edit_buffer.pop();
                     }
@@ -996,7 +1003,25 @@ impl App {
             Message::ExitEditTask => {
                 if let Some(index) = self.state.task_list_state.selected() {
                     if let Some(task) = self.state.tasks.get_mut(index) {
-                        task.description = self.state.task_edit_buffer.clone();
+                        match self.state.task_edit_focus {
+                            crate::app::state::TaskEditFocus::Description => {
+                                task.description = self.state.task_edit_buffer.clone();
+                            }
+                            crate::app::state::TaskEditFocus::DueDate => {
+                                let buffer = self.state.task_edit_buffer.trim();
+                                if buffer.is_empty() {
+                                    task.due_date = None;
+                                } else if let Ok(date) =
+                                    NaiveDate::parse_from_str(buffer, "%Y-%m-%d")
+                                {
+                                    task.due_date = Some(date);
+                                } else {
+                                    self.state.status_message =
+                                        "Invalid date format (YYYY-MM-DD)".to_string();
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 self.state.mode = Mode::Normal;
@@ -1004,14 +1029,49 @@ impl App {
                 self.save_tasks();
             }
             Message::SwitchTaskEditFocus => {
-                self.state.task_edit_focus = match self.state.task_edit_focus {
-                    crate::app::state::TaskEditFocus::Description => {
-                        crate::app::state::TaskEditFocus::Priority
+                if let Some(index) = self.state.task_list_state.selected() {
+                    if let Some(task) = self.state.tasks.get_mut(index) {
+                        // Save the current field's buffer before switching
+                        match self.state.task_edit_focus {
+                            crate::app::state::TaskEditFocus::Description => {
+                                task.description = self.state.task_edit_buffer.clone();
+                            }
+                            crate::app::state::TaskEditFocus::DueDate => {
+                                let buffer = self.state.task_edit_buffer.trim();
+                                if buffer.is_empty() {
+                                    task.due_date = None;
+                                } else if let Ok(date) =
+                                    NaiveDate::parse_from_str(buffer, "%Y-%m-%d")
+                                {
+                                    task.due_date = Some(date);
+                                } else {
+                                    self.state.status_message =
+                                        "Invalid date format (YYYY-MM-DD)".to_string();
+                                }
+                            }
+                            _ => {}
+                        }
+
+                        // Switch focus and update buffer
+                        self.state.task_edit_focus = match self.state.task_edit_focus {
+                            crate::app::state::TaskEditFocus::Description => {
+                                self.state.task_edit_buffer.clear();
+                                crate::app::state::TaskEditFocus::Priority
+                            }
+                            crate::app::state::TaskEditFocus::Priority => {
+                                self.state.task_edit_buffer = task
+                                    .due_date
+                                    .map(|d| d.format("%Y-%m-%d").to_string())
+                                    .unwrap_or_default();
+                                crate::app::state::TaskEditFocus::DueDate
+                            }
+                            crate::app::state::TaskEditFocus::DueDate => {
+                                self.state.task_edit_buffer = task.description.clone();
+                                crate::app::state::TaskEditFocus::Description
+                            }
+                        };
                     }
-                    crate::app::state::TaskEditFocus::Priority => {
-                        crate::app::state::TaskEditFocus::Description
-                    }
-                };
+                }
             }
             Message::CyclePriorityForward => {
                 if let Some(index) = self.state.task_list_state.selected() {
