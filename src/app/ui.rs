@@ -2,7 +2,7 @@ use crate::app::app::{App, Focus};
 use crate::components::{
     calendar::CalendarWidget, help::HelpWidget, note_editor::NoteEditorWidget,
     note_list::NoteListWidget, status_bar::StatusBarWidget, tag_list::TagListWidget,
-    task_list::TaskListWidget,
+    task_editor::TaskEditorWidget, task_list::TaskListWidget,
 };
 use ratatui::{
     prelude::*,
@@ -120,4 +120,18 @@ pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>)
         message: &app.state.status_message,
     };
     frame.render_widget(status_bar, status_bar_area);
+
+    // Render popup widgets over the main UI
+    if let crate::app::state::Mode::EditTask = app.state.mode {
+        if let Some(task_index) = app.state.task_list_state.selected() {
+            if let Some(task) = app.state.tasks.get(task_index) {
+                let task_editor = TaskEditorWidget {
+                    task,
+                    edit_buffer: &app.state.task_edit_buffer,
+                    focus: &app.state.task_edit_focus,
+                };
+                frame.render_widget(task_editor, frame.size());
+            }
+        }
+    }
 }

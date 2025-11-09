@@ -55,6 +55,13 @@ pub enum Mode {
     ConfirmDeletion,
     TagInput,
     ConfirmQuit,
+    EditTask,
+}
+
+/// Represents which field is being edited in a task.
+pub enum TaskEditFocus {
+    Description,
+    Priority,
 }
 
 /// The main application state.
@@ -78,6 +85,8 @@ pub struct AppState {
     pub active_tag: Option<String>,
     pub cursor_offset: usize,
     pub task_list_state: ListState,
+    pub task_edit_focus: TaskEditFocus,
+    pub task_edit_buffer: String,
 }
 
 impl AppState {
@@ -164,6 +173,8 @@ impl AppState {
             active_tag: None,
             cursor_offset: 0,
             task_list_state,
+            task_edit_focus: TaskEditFocus::Description,
+            task_edit_buffer: String::new(),
         }
     }
 }

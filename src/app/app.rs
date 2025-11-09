@@ -56,6 +56,11 @@ pub enum Message {
     ToggleTaskComplete,
     NewTask,
     DeleteTask,
+    EnterEditTask,
+    ExitEditTask,
+    SwitchTaskEditFocus,
+    CyclePriorityForward,
+    CyclePriorityBackward,
     CursorLeft,
     CursorRight,
     CursorUp,
@@ -280,6 +285,24 @@ impl App {
                             _ => Ok(None),
                         };
                     }
+                    Mode::EditTask => {
+                        return match self.state.task_edit_focus {
+                            crate::app::state::TaskEditFocus::Description => match key.code {
+                                KeyCode::Esc => Ok(Some(Message::ExitEditTask)),
+                                KeyCode::Tab => Ok(Some(Message::SwitchTaskEditFocus)),
+                                KeyCode::Char(c) => Ok(Some(Message::Char(c))),
+                                KeyCode::Backspace => Ok(Some(Message::Backspace)),
+                                _ => Ok(None),
+                            },
+                            crate::app::state::TaskEditFocus::Priority => match key.code {
+                                KeyCode::Esc => Ok(Some(Message::ExitEditTask)),
+                                KeyCode::Tab => Ok(Some(Message::SwitchTaskEditFocus)),
+                                KeyCode::Left => Ok(Some(Message::CyclePriorityBackward)),
+                                KeyCode::Right => Ok(Some(Message::CyclePriorityForward)),
+                                _ => Ok(None),
+                            },
+                        };
+                    }
                     Mode::Normal => {
                         // Fall through to view-specific and global handlers
                     }
@@ -351,6 +374,7 @@ impl App {
                         KeyCode::Char('k') | KeyCode::Up => return Ok(Some(Message::PreviousTask)),
                         KeyCode::Char('a') => return Ok(Some(Message::NewTask)),
                         KeyCode::Char('d') => return Ok(Some(Message::DeleteTask)),
+                        KeyCode::Char('e') => return Ok(Some(Message::EnterEditTask)),
                         KeyCode::Char(' ') => return Ok(Some(Message::ToggleTaskComplete)),
                         _ => {}
                     },
@@ -504,6 +528,13 @@ impl App {
                 }
                 Mode::ConfirmDeletion => {}
                 Mode::ConfirmQuit => {}
+                Mode::EditTask => {
+                    if let crate::app::state::TaskEditFocus::Description =
+                        self.state.task_edit_focus
+                    {
+                        self.state.task_edit_buffer.push(c);
+                    }
+                }
             },
             Message::Backspace => match self.state.mode {
                 Mode::Insert => {
@@ -550,6 +581,13 @@ impl App {
                 }
                 Mode::ConfirmDeletion => {}
                 Mode::ConfirmQuit => {}
+                Mode::EditTask => {
+                    if let crate::app::state::TaskEditFocus::Description =
+                        self.state.task_edit_focus
+                    {
+                        self.state.task_edit_buffer.pop();
+                    }
+                }
             },
             Message::EnterSearch => {
                 self.state.current_view = View::Search;
@@ -943,6 +981,61 @@ impl App {
                     if let Some(task) = self.state.tasks.get_mut(index) {
                         task.completed = !task.completed;
                         self.save_tasks();
+                    }
+                }
+            }
+            Message::EnterEditTask => {
+                if let Some(index) = self.state.task_list_state.selected() {
+                    if let Some(task) = self.state.tasks.get(index) {
+                        self.state.mode = Mode::EditTask;
+                        self.state.task_edit_focus = crate::app::state::TaskEditFocus::Description;
+                        self.state.task_edit_buffer = task.description.clone();
+                    }
+                }
+            }
+            Message::ExitEditTask => {
+                if let Some(index) = self.state.task_list_state.selected() {
+                    if let Some(task) = self.state.tasks.get_mut(index) {
+                        task.description = self.state.task_edit_buffer.clone();
+                    }
+                }
+                self.state.mode = Mode::Normal;
+                self.state.task_edit_buffer.clear();
+                self.save_tasks();
+            }
+            Message::SwitchTaskEditFocus => {
+                self.state.task_edit_focus = match self.state.task_edit_focus {
+                    crate::app::state::TaskEditFocus::Description => {
+                        crate::app::state::TaskEditFocus::Priority
+                    }
+                    crate::app::state::TaskEditFocus::Priority => {
+                        crate::app::state::TaskEditFocus::Description
+                    }
+                };
+            }
+            Message::CyclePriorityForward => {
+                if let Some(index) = self.state.task_list_state.selected() {
+                    if let Some(task) = self.state.tasks.get_mut(index) {
+                        task.priority = match task.priority {
+                            crate::app::state::Priority::Low => crate::app::state::Priority::Medium,
+                            crate::app::state::Priority::Medium => {
+                                crate::app::state::Priority::High
+                            }
+                            crate::app::state::Priority::High => crate::app::state::Priority::Low,
+                        };
+                    }
+                }
+            }
+            Message::CyclePriorityBackward => {
+                if let Some(index) = self.state.task_list_state.selected() {
+                    if let Some(task) = self.state.tasks.get_mut(index) {
+                        task.priority = match task.priority {
+                            crate::app::state::Priority::Low => crate::app::state::Priority::High,
+                            crate::app::state::Priority::Medium => crate::app::state::Priority::Low,
+                            crate::app::state::Priority::High => {
+                                crate::app::state::Priority::Medium
+                            }
+                        };
                     }
                 }
             }
