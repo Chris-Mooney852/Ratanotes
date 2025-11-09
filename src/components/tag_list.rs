@@ -8,16 +8,27 @@ use ratatui::{
 pub struct TagListWidget<'a> {
     pub tags: &'a [String],
     pub has_focus: bool,
+    pub active_tag: &'a Option<String>,
 }
 
 impl<'a> StatefulWidget for TagListWidget<'a> {
     type State = ListState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let active_style = Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD);
+
         let items: Vec<ListItem> = self
             .tags
             .iter()
-            .map(|tag| ListItem::new(tag.clone()))
+            .map(|tag| {
+                let mut item = ListItem::new(tag.clone());
+                if self.active_tag.as_deref() == Some(tag) {
+                    item = item.style(active_style);
+                }
+                item
+            })
             .collect();
 
         let border_style = if self.has_focus {

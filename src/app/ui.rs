@@ -52,6 +52,7 @@ pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>)
             let tag_list = TagListWidget {
                 tags: &app.state.tags,
                 has_focus: matches!(app.focus, Focus::TagList),
+                active_tag: &app.state.active_tag,
             };
             frame.render_stateful_widget(tag_list, chunks[1], &mut app.state.tag_list_state);
         }
