@@ -54,6 +54,8 @@ pub enum Message {
     CursorRight,
     CursorUp,
     CursorDown,
+    EnterTagInput,
+    AddTag,
     EnterInsertMode,
     EnterNormalMode,
     EnterCommandMode,
@@ -240,6 +242,15 @@ impl App {
                             _ => Ok(None),
                         };
                     }
+                    Mode::TagInput => {
+                        return match key.code {
+                            KeyCode::Esc => Ok(Some(Message::EnterNormalMode)),
+                            KeyCode::Enter => Ok(Some(Message::AddTag)),
+                            KeyCode::Char(c) => Ok(Some(Message::Char(c))),
+                            KeyCode::Backspace => Ok(Some(Message::Backspace)),
+                            _ => Ok(None),
+                        };
+                    }
                     Mode::Command => {
                         return match key.code {
                             KeyCode::Esc => Ok(Some(Message::EnterNormalMode)),
@@ -304,6 +315,7 @@ impl App {
                         }
                     }
                     View::NoteEditor => match key.code {
+                        KeyCode::Char('t') => return Ok(Some(Message::EnterTagInput)),
                         KeyCode::Char('i') => return Ok(Some(Message::EnterInsertMode)),
                         KeyCode::Char('r') => return Ok(Some(Message::RenameNote)),
                         KeyCode::Esc => return Ok(Some(Message::SwitchToNoteList)),
@@ -453,6 +465,10 @@ impl App {
                     self.state.command_input.push(c);
                     self.state.status_message = format!("{}{}", prefix, self.state.command_input);
                 }
+                Mode::TagInput => {
+                    self.state.command_input.push(c);
+                    self.state.status_message = format!("Add Tag: {}", self.state.command_input);
+                }
                 Mode::Normal => {
                     if let View::Search = self.state.current_view {
                         self.state.search_query.push(c);
@@ -493,6 +509,10 @@ impl App {
                     };
                     self.state.command_input.pop();
                     self.state.status_message = format!("{}{}", prefix, self.state.command_input);
+                }
+                Mode::TagInput => {
+                    self.state.command_input.pop();
+                    self.state.status_message = format!("Add Tag: {}", self.state.command_input);
                 }
                 Mode::Normal => {
                     if let View::Search = self.state.current_view {
@@ -648,6 +668,26 @@ impl App {
                     self.state.previous_view = Some(Box::new(self.state.current_view.clone()));
                     self.state.current_view = View::Help;
                 }
+            }
+            Message::EnterTagInput => {
+                self.state.mode = Mode::TagInput;
+                self.state.command_input.clear();
+                self.state.status_message = "Add Tag: ".to_string();
+            }
+            Message::AddTag => {
+                let new_tag = self.state.command_input.trim().to_string();
+                if !new_tag.is_empty() {
+                    if let Some(index) = self.state.note_list_state.selected() {
+                        if let Some(note) = self.state.notes.get_mut(index) {
+                            if !note.tags.contains(&new_tag) {
+                                note.tags.push(new_tag);
+                                self.state.dirty = true;
+                            }
+                        }
+                    }
+                }
+                // Return to normal mode and clear status
+                self.update(Message::EnterNormalMode);
             }
             Message::ToggleFocus => {
                 self.focus = match self.focus {

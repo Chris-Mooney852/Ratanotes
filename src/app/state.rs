@@ -53,6 +53,7 @@ pub enum Mode {
     Command,
     TitleInput,
     ConfirmDeletion,
+    TagInput,
 }
 
 /// The main application state.

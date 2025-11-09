@@ -61,17 +61,17 @@ impl DataHandler {
     /// Parses a single note file.
     fn parse_note(&self, path: &Path) -> Result<Note, std::io::Error> {
         let mut file = File::open(path)?;
-        let mut content = String::new();
-        file.read_to_string(&mut content)?;
+        let mut full_content = String::new();
+        file.read_to_string(&mut full_content)?;
 
         let metadata = fs::metadata(path)?;
         let created_at: DateTime<Utc> = metadata.created()?.into();
         let updated_at: DateTime<Utc> = metadata.modified()?.into();
 
-        let (tags, parsed_title, body) = self.parse_front_matter(&content);
+        let (tags, title, content_body) = self.parse_file_parts(&full_content);
 
-        let title = if !parsed_title.is_empty() && parsed_title != "Untitled" {
-            parsed_title
+        let final_title = if !title.is_empty() {
+            title
         } else {
             path.file_stem()
                 .and_then(|s| s.to_str())
@@ -81,18 +81,19 @@ impl DataHandler {
 
         Ok(Note {
             path: path.to_path_buf(),
-            title,
-            content: body,
+            title: final_title,
+            content: content_body.to_string(),
             tags,
             created_at,
             updated_at,
         })
     }
 
-    /// Parses YAML front matter and extracts title from the content.
-    fn parse_front_matter<'a>(&self, content: &'a str) -> (Vec<String>, String, String) {
+    /// Parses the file content into tags, title, and body.
+    /// It reads title and tags from YAML front matter.
+    fn parse_file_parts<'a>(&self, content: &'a str) -> (Vec<String>, String, &'a str) {
         if content.starts_with("---") {
-            if let Some(end_front_matter) = content[3..].find("---") {
+            if let Some(end_front_matter) = content.get(3..).and_then(|s| s.find("---")) {
                 let front_matter_str = &content[3..3 + end_front_matter];
                 let body = content[3 + end_front_matter + 3..].trim_start();
                 if let Ok(front_matter) =
@@ -100,32 +101,19 @@ impl DataHandler {
                 {
                     let tags = front_matter["tags"]
                         .as_sequence()
-                        .unwrap_or(&vec![])
-                        .iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect();
-                    let (title, body_content) = self.extract_title_from_body(body);
-                    return (tags, title, body_content.to_string());
+                        .map(|s| {
+                            s.iter()
+                                .filter_map(|v| v.as_str().map(String::from))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let title = front_matter["title"].as_str().unwrap_or("").to_string();
+                    return (tags, title, body);
                 }
             }
         }
-        let (title, body_content) = self.extract_title_from_body(content);
-        (vec![], title, body_content.to_string())
-    }
-
-    /// Extracts the first H1 header as the title.
-    fn extract_title_from_body<'a>(&self, body: &'a str) -> (String, &'a str) {
-        if let Some(h1_line_end) = body.find('\n') {
-            let first_line = &body[..h1_line_end];
-            if first_line.starts_with("# ") {
-                let title = first_line[2..].trim().to_string();
-                let body_without_h1 = body[h1_line_end..].trim_start();
-                return (title, body_without_h1);
-            }
-        } else if body.starts_with("# ") {
-            return (body[2..].trim().to_string(), "");
-        }
-        ("Untitled".to_string(), body)
+        // No valid front matter found, treat the whole file as content
+        (vec![], String::new(), content)
     }
 
     /// Loads all tasks from the filesystem.
@@ -154,22 +142,23 @@ impl DataHandler {
     pub fn save_notes(&self, notes: &[Note]) -> Result<(), std::io::Error> {
         for note in notes {
             let mut file = File::create(&note.path)?;
-            let mut content = String::new();
+            let mut full_content = String::new();
 
+            // Front matter
+            full_content.push_str("---\n");
+            full_content.push_str(&format!("title: {}\n", note.title));
             if !note.tags.is_empty() {
-                let mut front_matter = "---\ntags:\n".to_string();
+                full_content.push_str("tags:\n");
                 for tag in &note.tags {
-                    front_matter.push_str(&format!("  - {}\n", tag));
+                    full_content.push_str(&format!("  - {}\n", tag));
                 }
-                front_matter.push_str("---\n\n");
-                content.push_str(&front_matter);
             }
+            full_content.push_str("---\n\n");
 
-            let title_header = format!("# {}\n\n", note.title);
-            content.push_str(&title_header);
-            content.push_str(&note.content);
+            // Content
+            full_content.push_str(&note.content);
 
-            file.write_all(content.as_bytes())?;
+            file.write_all(full_content.as_bytes())?;
         }
         Ok(())
     }

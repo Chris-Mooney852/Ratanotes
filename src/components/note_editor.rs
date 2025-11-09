@@ -16,8 +16,27 @@ impl<'a> Widget for NoteEditorWidget<'a> {
         } else {
             Style::default()
         };
+
+        let tags_text = if self.note.tags.is_empty() {
+            String::new()
+        } else {
+            // Joins tags with a separator and adds a little flair
+            let tags_str = self.note.tags.join(" | ");
+            format!(" [ {} ]", tags_str)
+        };
+
+        let title = Line::from(vec![
+            Span::raw(self.note.title.as_str()),
+            Span::styled(
+                tags_text,
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::ITALIC),
+            ),
+        ]);
+
         let block = Block::default()
-            .title(self.note.title.as_str())
+            .title(title)
             .borders(Borders::ALL)
             .border_style(border_style);
         Paragraph::new(self.note.content.as_str())
