@@ -74,7 +74,7 @@ pub struct AppState {
     pub tags: Vec<String>,
     pub tag_list_state: ListState,
     pub active_tag: Option<String>,
-    pub cursor_position: (u16, u16),
+    pub cursor_offset: usize,
 }
 
 impl AppState {
@@ -154,7 +154,7 @@ impl AppState {
             tags,
             tag_list_state,
             active_tag: None,
-            cursor_position: (0, 0),
+            cursor_offset: 0,
         }
     }
 }

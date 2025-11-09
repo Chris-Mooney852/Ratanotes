@@ -50,6 +50,10 @@ pub enum Message {
     NextTag,
     SelectTag,
     NewLine,
+    CursorLeft,
+    CursorRight,
+    CursorUp,
+    CursorDown,
     EnterInsertMode,
     EnterNormalMode,
     EnterCommandMode,
@@ -103,7 +107,7 @@ impl App {
         while self.state.running {
             // Draw the UI
             let cursor_position = if let Mode::Insert = self.state.mode {
-                Some(self.state.cursor_position)
+                self.get_cursor_position()
             } else {
                 None
             };
@@ -111,7 +115,13 @@ impl App {
 
             // Show/hide cursor based on mode
             match self.state.mode {
-                Mode::Insert => terminal.show_cursor()?,
+                Mode::Insert => {
+                    if let Some(pos) = self.get_cursor_position() {
+                        // We show the cursor before drawing to avoid flicker
+                        terminal.set_cursor(pos.0 + 1, pos.1 + 1)?;
+                    }
+                    terminal.show_cursor()?
+                }
                 _ => terminal.hide_cursor()?,
             }
 
@@ -149,22 +159,32 @@ impl App {
     }
 
     /// Handles terminal events and returns a message if an action is required.
-    /// Calculates the cursor position based on the currently selected note's content.
-    /// NOTE: This is a naive implementation and does not account for word wrapping.
-    fn update_cursor_position(&mut self) {
+    /// Calculates the cursor (x, y) position based on the character offset.
+    fn get_cursor_position(&self) -> Option<(u16, u16)> {
         if let Some(index) = self.state.note_list_state.selected() {
             if let Some(note) = self.state.notes.get(index) {
                 let content = &note.content;
-                let mut x = 0;
-                let y = content.chars().filter(|&c| c == '\n').count();
+                let offset = self.state.cursor_offset.min(content.chars().count());
 
-                if let Some(last_line) = content.lines().last() {
-                    x = last_line.chars().count();
+                let mut x = 0;
+                let mut y = 0;
+
+                for (i, c) in content.chars().enumerate() {
+                    if i == offset {
+                        break;
+                    }
+                    if c == '\n' {
+                        x = 0;
+                        y += 1;
+                    } else {
+                        x += 1; // Does not handle wide characters
+                    }
                 }
 
-                self.state.cursor_position = (x as u16, y as u16);
+                return Some((x as u16, y as u16));
             }
         }
+        None
     }
 
     fn handle_events(&self) -> Result<Option<Message>> {
@@ -180,6 +200,10 @@ impl App {
                         return match key.code {
                             KeyCode::Esc => Ok(Some(Message::EnterNormalMode)),
                             KeyCode::Enter => Ok(Some(Message::NewLine)),
+                            KeyCode::Left => Ok(Some(Message::CursorLeft)),
+                            KeyCode::Right => Ok(Some(Message::CursorRight)),
+                            KeyCode::Up => Ok(Some(Message::CursorUp)),
+                            KeyCode::Down => Ok(Some(Message::CursorDown)),
                             KeyCode::Char(c) => Ok(Some(Message::Char(c))),
                             KeyCode::Backspace => Ok(Some(Message::Backspace)),
                             _ => Ok(None),
@@ -188,7 +212,11 @@ impl App {
                     Mode::TitleInput => {
                         return match key.code {
                             KeyCode::Esc => Ok(Some(Message::EnterNormalMode)),
-                            KeyCode::Enter => Ok(Some(Message::SetNoteTitle)),
+                            KeyCode::Enter => Ok(Some(Message::NewLine)),
+                            KeyCode::Left => Ok(Some(Message::CursorLeft)),
+                            KeyCode::Right => Ok(Some(Message::CursorRight)),
+                            KeyCode::Up => Ok(Some(Message::CursorUp)),
+                            KeyCode::Down => Ok(Some(Message::CursorDown)),
                             KeyCode::Char(c) => Ok(Some(Message::Char(c))),
                             KeyCode::Backspace => Ok(Some(Message::Backspace)),
                             _ => Ok(None),
@@ -344,8 +372,12 @@ impl App {
             }
             Message::EnterInsertMode => {
                 self.state.mode = Mode::Insert;
+                if let Some(index) = self.state.note_list_state.selected() {
+                    if let Some(note) = self.state.notes.get(index) {
+                        self.state.cursor_offset = note.content.chars().count();
+                    }
+                }
                 self.state.status_message = "-- INSERT --".to_string();
-                self.update_cursor_position();
             }
             Message::EnterNormalMode => {
                 if let Mode::Insert = self.state.mode {
@@ -388,8 +420,11 @@ impl App {
                 Mode::Insert => {
                     if let Some(index) = self.state.note_list_state.selected() {
                         if let Some(note) = self.state.notes.get_mut(index) {
-                            note.content.push(c);
-                            self.update_cursor_position();
+                            let offset = self.state.cursor_offset.min(note.content.chars().count());
+                            let mut content: Vec<char> = note.content.chars().collect();
+                            content.insert(offset, c);
+                            note.content = content.into_iter().collect();
+                            self.state.cursor_offset += 1;
                         }
                     }
                 }
@@ -419,8 +454,14 @@ impl App {
                 Mode::Insert => {
                     if let Some(index) = self.state.note_list_state.selected() {
                         if let Some(note) = self.state.notes.get_mut(index) {
-                            note.content.pop();
-                            self.update_cursor_position();
+                            if self.state.cursor_offset > 0 {
+                                let offset =
+                                    self.state.cursor_offset.min(note.content.chars().count());
+                                let mut content: Vec<char> = note.content.chars().collect();
+                                content.remove(offset - 1);
+                                note.content = content.into_iter().collect();
+                                self.state.cursor_offset -= 1;
+                            }
                         }
                     }
                 }
@@ -486,6 +527,7 @@ impl App {
             }
             Message::OpenNote => {
                 if self.state.note_list_state.selected().is_some() {
+                    self.state.cursor_offset = 0;
                     self.state.current_view = View::NoteEditor;
                     self.state.status_message = "".to_string();
                 }
@@ -643,8 +685,92 @@ impl App {
                 if let Mode::Insert = self.state.mode {
                     if let Some(index) = self.state.note_list_state.selected() {
                         if let Some(note) = self.state.notes.get_mut(index) {
-                            note.content.push('\n');
-                            self.update_cursor_position();
+                            let offset = self.state.cursor_offset.min(note.content.chars().count());
+                            let mut content: Vec<char> = note.content.chars().collect();
+                            content.insert(offset, '\n');
+                            note.content = content.into_iter().collect();
+                            self.state.cursor_offset += 1;
+                        }
+                    }
+                }
+            }
+            Message::CursorLeft => {
+                self.state.cursor_offset = self.state.cursor_offset.saturating_sub(1);
+            }
+            Message::CursorRight => {
+                if let Some(index) = self.state.note_list_state.selected() {
+                    if let Some(note) = self.state.notes.get(index) {
+                        if self.state.cursor_offset < note.content.chars().count() {
+                            self.state.cursor_offset += 1;
+                        }
+                    }
+                }
+            }
+            Message::CursorUp => {
+                if let Some(index) = self.state.note_list_state.selected() {
+                    if let Some(note) = self.state.notes.get(index) {
+                        let offset = self.state.cursor_offset;
+                        let content_chars: Vec<char> = note.content.chars().collect();
+                        let line_starts: Vec<usize> = std::iter::once(0)
+                            .chain(
+                                content_chars
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|&(_, &c)| c == '\n')
+                                    .map(|(i, _)| i + 1),
+                            )
+                            .collect();
+
+                        let current_line_index = line_starts
+                            .iter()
+                            .rposition(|&start| start <= offset)
+                            .unwrap_or(0);
+
+                        if current_line_index > 0 {
+                            let current_col = offset - line_starts[current_line_index];
+                            let prev_line_index = current_line_index - 1;
+                            let prev_line_start = line_starts[prev_line_index];
+                            let prev_line_end = line_starts[current_line_index] - 1;
+                            let prev_line_len = prev_line_end - prev_line_start;
+                            self.state.cursor_offset =
+                                prev_line_start + current_col.min(prev_line_len);
+                        }
+                    }
+                }
+            }
+            Message::CursorDown => {
+                if let Some(index) = self.state.note_list_state.selected() {
+                    if let Some(note) = self.state.notes.get(index) {
+                        let offset = self.state.cursor_offset;
+                        let content_chars: Vec<char> = note.content.chars().collect();
+
+                        let line_starts: Vec<usize> = std::iter::once(0)
+                            .chain(
+                                content_chars
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|&(_, &c)| c == '\n')
+                                    .map(|(i, _)| i + 1),
+                            )
+                            .collect();
+
+                        let current_line_index = line_starts
+                            .iter()
+                            .rposition(|&start| start <= offset)
+                            .unwrap_or(0);
+
+                        if current_line_index < line_starts.len() - 1 {
+                            let current_col = offset - line_starts[current_line_index];
+                            let next_line_index = current_line_index + 1;
+                            let next_line_start = line_starts[next_line_index];
+                            let next_line_end = if next_line_index + 1 < line_starts.len() {
+                                line_starts[next_line_index + 1] - 1
+                            } else {
+                                content_chars.len()
+                            };
+                            let next_line_len = next_line_end - next_line_start;
+                            self.state.cursor_offset =
+                                next_line_start + current_col.min(next_line_len);
                         }
                     }
                 }
