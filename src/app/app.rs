@@ -39,6 +39,7 @@ pub enum Message {
     SetNoteTitle,
     DeleteNote,
     ConfirmDelete,
+    ToggleHelp,
     EnterInsertMode,
     EnterNormalMode,
     EnterCommandMode,
@@ -182,6 +183,13 @@ impl App {
                     };
                 }
 
+                if let View::Help = self.state.current_view {
+                    return match key.code {
+                        KeyCode::Char('?') | KeyCode::Esc => Ok(Some(Message::ToggleHelp)),
+                        _ => Ok(None),
+                    };
+                }
+
                 // View-specific keybindings in Normal mode
                 match self.state.current_view {
                     View::NoteList => match key.code {
@@ -211,6 +219,7 @@ impl App {
                 match key.code {
                     KeyCode::Char(':') => return Ok(Some(Message::EnterCommandMode)),
                     KeyCode::Char('/') => return Ok(Some(Message::EnterSearch)),
+                    KeyCode::Char('?') => return Ok(Some(Message::ToggleHelp)),
                     KeyCode::Char('q') => return Ok(Some(Message::Quit)),
                     KeyCode::Char('n') => return Ok(Some(Message::SwitchToNoteList)),
                     KeyCode::Char('c') => return Ok(Some(Message::SwitchToCalendar)),
@@ -506,6 +515,19 @@ impl App {
                     }
                 }
                 self.update(Message::EnterNormalMode);
+            }
+            Message::ToggleHelp => {
+                if let View::Help = self.state.current_view {
+                    if let Some(previous_view) = self.state.previous_view.take() {
+                        self.state.current_view = *previous_view;
+                    } else {
+                        // Fallback if there's no previous view
+                        self.state.current_view = View::NoteList;
+                    }
+                } else {
+                    self.state.previous_view = Some(Box::new(self.state.current_view.clone()));
+                    self.state.current_view = View::Help;
+                }
             }
         }
     }

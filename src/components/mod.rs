@@ -1,4 +1,5 @@
 pub mod calendar;
+pub mod help;
 pub mod note_editor;
 pub mod note_list;
 pub mod status_bar;

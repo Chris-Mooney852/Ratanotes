@@ -1,6 +1,6 @@
 use crate::components::{
-    calendar::CalendarWidget, note_editor::NoteEditorWidget, note_list::NoteListWidget,
-    status_bar::StatusBarWidget, task_list::TaskListWidget,
+    calendar::CalendarWidget, help::HelpWidget, note_editor::NoteEditorWidget,
+    note_list::NoteListWidget, status_bar::StatusBarWidget, task_list::TaskListWidget,
 };
 use ratatui::{
     prelude::*,
@@ -67,6 +67,10 @@ pub fn ui(frame: &mut Frame, app: &mut AppState) {
             );
 
             frame.render_widget(results_list, content_area);
+        }
+        super::state::View::Help => {
+            let help_widget = HelpWidget;
+            frame.render_widget(help_widget, content_area);
         }
     };
 

@@ -2,6 +2,10 @@
 
 Ratanotes is a simple, fast, and Vim-inspired note-taking application that runs in your terminal. Built with Rust and the [`ratatui`](https://ratatui.rs/) library, it's designed for developers, writers, and anyone who loves the efficiency of a keyboard-centric workflow.
 
+> [!WARNING]
+> This app is entirly vibe coded.
+> I'm treating this project as a test of gemini's capabilities
+
 ## Features
 
 -   **Vim-like Keybindings**: Navigate, edit, and manage your notes without leaving the keyboard.

@@ -36,12 +36,14 @@ pub struct Note {
 }
 
 /// Represents the current active view of the application.
+#[derive(Clone, Debug)]
 pub enum View {
     NoteList,
     NoteEditor,
     Calendar,
     Tasks,
     Search,
+    Help,
 }
 
 /// Represents the current operational mode of the application.
@@ -58,6 +60,7 @@ pub struct AppState {
     pub notes: Vec<Note>,
     pub tasks: Vec<Task>,
     pub current_view: View,
+    pub previous_view: Option<Box<View>>,
     pub search_query: String,
     pub status_message: String,
     pub running: bool,
@@ -127,6 +130,7 @@ impl AppState {
             notes,
             tasks: sample_tasks,
             current_view: View::NoteList,
+            previous_view: None,
             search_query: String::new(),
             status_message: "Welcome to Ratanotes! Press 'q' to quit.".to_string(),
             running: true,
