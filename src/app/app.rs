@@ -18,6 +18,11 @@ use std::{
     path::PathBuf,
 };
 
+pub enum Focus {
+    NoteList,
+    TagList,
+}
+
 /// Represents the messages that can be sent to the update function.
 pub enum Message {
     Quit,
@@ -40,6 +45,11 @@ pub enum Message {
     DeleteNote,
     ConfirmDelete,
     ToggleHelp,
+    ToggleFocus,
+    PreviousTag,
+    NextTag,
+    SelectTag,
+    NewLine,
     EnterInsertMode,
     EnterNormalMode,
     EnterCommandMode,
@@ -49,9 +59,10 @@ pub enum Message {
 /// The main application struct.
 pub struct App {
     /// The application's state.
-    state: AppState,
+    pub(crate) state: AppState,
     /// Handles data persistence.
-    data_handler: DataHandler,
+    pub(crate) data_handler: DataHandler,
+    pub(crate) focus: Focus,
 }
 
 impl App {
@@ -83,6 +94,7 @@ impl App {
         Self {
             state,
             data_handler,
+            focus: Focus::NoteList,
         }
     }
 
@@ -90,7 +102,18 @@ impl App {
     pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
         while self.state.running {
             // Draw the UI
-            terminal.draw(|frame| ui(frame, &mut self.state))?;
+            let cursor_position = if let Mode::Insert = self.state.mode {
+                Some(self.state.cursor_position)
+            } else {
+                None
+            };
+            terminal.draw(|frame| ui(frame, self, cursor_position))?;
+
+            // Show/hide cursor based on mode
+            match self.state.mode {
+                Mode::Insert => terminal.show_cursor()?,
+                _ => terminal.hide_cursor()?,
+            }
 
             // Handle events and get a message
             if let Some(message) = self.handle_events()? {
@@ -126,6 +149,24 @@ impl App {
     }
 
     /// Handles terminal events and returns a message if an action is required.
+    /// Calculates the cursor position based on the currently selected note's content.
+    /// NOTE: This is a naive implementation and does not account for word wrapping.
+    fn update_cursor_position(&mut self) {
+        if let Some(index) = self.state.note_list_state.selected() {
+            if let Some(note) = self.state.notes.get(index) {
+                let content = &note.content;
+                let mut x = 0;
+                let y = content.chars().filter(|&c| c == '\n').count();
+
+                if let Some(last_line) = content.lines().last() {
+                    x = last_line.chars().count();
+                }
+
+                self.state.cursor_position = (x as u16, y as u16);
+            }
+        }
+    }
+
     fn handle_events(&self) -> Result<Option<Message>> {
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
@@ -138,6 +179,7 @@ impl App {
                     Mode::Insert => {
                         return match key.code {
                             KeyCode::Esc => Ok(Some(Message::EnterNormalMode)),
+                            KeyCode::Enter => Ok(Some(Message::NewLine)),
                             KeyCode::Char(c) => Ok(Some(Message::Char(c))),
                             KeyCode::Backspace => Ok(Some(Message::Backspace)),
                             _ => Ok(None),
@@ -192,15 +234,36 @@ impl App {
 
                 // View-specific keybindings in Normal mode
                 match self.state.current_view {
-                    View::NoteList => match key.code {
-                        KeyCode::Char('j') | KeyCode::Down => return Ok(Some(Message::NextNote)),
-                        KeyCode::Char('k') | KeyCode::Up => return Ok(Some(Message::PreviousNote)),
-                        KeyCode::Enter => return Ok(Some(Message::OpenNote)),
-                        KeyCode::Char('a') => return Ok(Some(Message::NewNote)),
-                        KeyCode::Char('r') => return Ok(Some(Message::RenameNote)),
-                        KeyCode::Char('d') => return Ok(Some(Message::DeleteNote)),
-                        _ => {}
-                    },
+                    View::NoteList => {
+                        if let KeyCode::Tab = key.code {
+                            return Ok(Some(Message::ToggleFocus));
+                        }
+                        match self.focus {
+                            Focus::NoteList => match key.code {
+                                KeyCode::Char('j') | KeyCode::Down => {
+                                    return Ok(Some(Message::NextNote));
+                                }
+                                KeyCode::Char('k') | KeyCode::Up => {
+                                    return Ok(Some(Message::PreviousNote));
+                                }
+                                KeyCode::Enter => return Ok(Some(Message::OpenNote)),
+                                KeyCode::Char('a') => return Ok(Some(Message::NewNote)),
+                                KeyCode::Char('r') => return Ok(Some(Message::RenameNote)),
+                                KeyCode::Char('d') => return Ok(Some(Message::DeleteNote)),
+                                _ => {}
+                            },
+                            Focus::TagList => match key.code {
+                                KeyCode::Char('j') | KeyCode::Down => {
+                                    return Ok(Some(Message::NextTag));
+                                }
+                                KeyCode::Char('k') | KeyCode::Up => {
+                                    return Ok(Some(Message::PreviousTag));
+                                }
+                                KeyCode::Enter => return Ok(Some(Message::SelectTag)),
+                                _ => {}
+                            },
+                        }
+                    }
                     View::NoteEditor => match key.code {
                         KeyCode::Char('i') => return Ok(Some(Message::EnterInsertMode)),
                         KeyCode::Char('r') => return Ok(Some(Message::RenameNote)),
@@ -282,6 +345,7 @@ impl App {
             Message::EnterInsertMode => {
                 self.state.mode = Mode::Insert;
                 self.state.status_message = "-- INSERT --".to_string();
+                self.update_cursor_position();
             }
             Message::EnterNormalMode => {
                 if let Mode::Insert = self.state.mode {
@@ -325,6 +389,7 @@ impl App {
                     if let Some(index) = self.state.note_list_state.selected() {
                         if let Some(note) = self.state.notes.get_mut(index) {
                             note.content.push(c);
+                            self.update_cursor_position();
                         }
                     }
                 }
@@ -355,6 +420,7 @@ impl App {
                     if let Some(index) = self.state.note_list_state.selected() {
                         if let Some(note) = self.state.notes.get_mut(index) {
                             note.content.pop();
+                            self.update_cursor_position();
                         }
                     }
                 }
@@ -527,6 +593,60 @@ impl App {
                 } else {
                     self.state.previous_view = Some(Box::new(self.state.current_view.clone()));
                     self.state.current_view = View::Help;
+                }
+            }
+            Message::ToggleFocus => {
+                self.focus = match self.focus {
+                    Focus::NoteList => Focus::TagList,
+                    Focus::TagList => Focus::NoteList,
+                };
+            }
+            Message::PreviousTag => {
+                if !self.state.tags.is_empty() {
+                    let i = self.state.tag_list_state.selected().unwrap_or(0);
+                    let new_i = if i == 0 {
+                        self.state.tags.len() - 1
+                    } else {
+                        i - 1
+                    };
+                    self.state.tag_list_state.select(Some(new_i));
+                }
+            }
+            Message::NextTag => {
+                if !self.state.tags.is_empty() {
+                    let i = self.state.tag_list_state.selected().unwrap_or(0);
+                    let new_i = if i >= self.state.tags.len() - 1 {
+                        0
+                    } else {
+                        i + 1
+                    };
+                    self.state.tag_list_state.select(Some(new_i));
+                }
+            }
+            Message::SelectTag => {
+                if let Some(index) = self.state.tag_list_state.selected() {
+                    let tag = &self.state.tags[index];
+                    if self.state.active_tag.as_ref() == Some(tag) {
+                        self.state.active_tag = None; // Deselect if already active
+                    } else {
+                        self.state.active_tag = Some(tag.clone());
+                    }
+                    // Reset note list selection
+                    if !self.state.notes.is_empty() {
+                        self.state.note_list_state.select(Some(0));
+                    } else {
+                        self.state.note_list_state.select(None);
+                    }
+                }
+            }
+            Message::NewLine => {
+                if let Mode::Insert = self.state.mode {
+                    if let Some(index) = self.state.note_list_state.selected() {
+                        if let Some(note) = self.state.notes.get_mut(index) {
+                            note.content.push('\n');
+                            self.update_cursor_position();
+                        }
+                    }
                 }
             }
         }

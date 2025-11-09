@@ -71,6 +71,10 @@ pub struct AppState {
     pub command_input: String,
     pub search_results: Vec<usize>,
     pub note_list_state: ListState,
+    pub tags: Vec<String>,
+    pub tag_list_state: ListState,
+    pub active_tag: Option<String>,
+    pub cursor_position: (u16, u16),
 }
 
 impl AppState {
@@ -126,6 +130,12 @@ impl AppState {
             note_list_state.select(Some(0));
         }
 
+        let mut tags: Vec<String> = notes.iter().flat_map(|note| note.tags.clone()).collect();
+        tags.sort_unstable();
+        tags.dedup();
+
+        let tag_list_state = ListState::default();
+
         Self {
             notes,
             tasks: sample_tasks,
@@ -141,6 +151,10 @@ impl AppState {
             command_input: String::new(),
             search_results: Vec::new(),
             note_list_state,
+            tags,
+            tag_list_state,
+            active_tag: None,
+            cursor_position: (0, 0),
         }
     }
 }
