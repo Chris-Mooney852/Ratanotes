@@ -95,11 +95,13 @@ impl App {
                 format!("Error loading {}. Using sample data.", errors.join(", "));
         }
 
-        Self {
+        let mut app = Self {
             state,
             data_handler,
             focus: Focus::NoteList,
-        }
+        };
+        app.update_tags();
+        app
     }
 
     /// Runs the application's main loop.
@@ -187,6 +189,19 @@ impl App {
         None
     }
 
+    /// Updates the global tag list from all notes.
+    fn update_tags(&mut self) {
+        let mut tags: Vec<String> = self
+            .state
+            .notes
+            .iter()
+            .flat_map(|note| note.tags.clone())
+            .collect();
+        tags.sort_unstable();
+        tags.dedup();
+        self.state.tags = tags;
+    }
+
     fn handle_events(&self) -> Result<Option<Message>> {
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
@@ -212,11 +227,7 @@ impl App {
                     Mode::TitleInput => {
                         return match key.code {
                             KeyCode::Esc => Ok(Some(Message::EnterNormalMode)),
-                            KeyCode::Enter => Ok(Some(Message::NewLine)),
-                            KeyCode::Left => Ok(Some(Message::CursorLeft)),
-                            KeyCode::Right => Ok(Some(Message::CursorRight)),
-                            KeyCode::Up => Ok(Some(Message::CursorUp)),
-                            KeyCode::Down => Ok(Some(Message::CursorDown)),
+                            KeyCode::Enter => Ok(Some(Message::SetNoteTitle)),
                             KeyCode::Char(c) => Ok(Some(Message::Char(c))),
                             KeyCode::Backspace => Ok(Some(Message::Backspace)),
                             _ => Ok(None),
@@ -363,6 +374,7 @@ impl App {
                     if errors.is_empty() {
                         self.state.status_message = "Saved successfully!".to_string();
                         self.state.dirty = false;
+                        self.update_tags();
                     } else {
                         self.state.status_message = format!("Error saving {}.", errors.join(", "));
                     }
