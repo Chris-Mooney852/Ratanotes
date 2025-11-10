@@ -12,6 +12,7 @@ pub struct CalendarWidget<'a> {
     pub year: i32,
     pub month: u32,
     pub notes: &'a [Note],
+    pub selected_date: NaiveDate,
 }
 
 impl<'a> Widget for CalendarWidget<'a> {
@@ -87,6 +88,14 @@ impl<'a> Widget for CalendarWidget<'a> {
                         && day_counter == today.day()
                     {
                         style = style.add_modifier(Modifier::BOLD).bg(Color::Blue);
+                    }
+
+                    // Highlight the selected day
+                    if self.year == self.selected_date.year()
+                        && self.month == self.selected_date.month()
+                        && day_counter == self.selected_date.day()
+                    {
+                        style = style.add_modifier(Modifier::REVERSED);
                     }
 
                     Paragraph::new(day_counter.to_string())

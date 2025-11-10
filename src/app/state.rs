@@ -90,6 +90,7 @@ pub struct AppState {
     pub task_list_state: ListState,
     pub task_edit_focus: TaskEditFocus,
     pub task_edit_buffer: String,
+    pub selected_date: NaiveDate,
 }
 
 impl AppState {
@@ -179,6 +180,7 @@ impl AppState {
             task_list_state,
             task_edit_focus: TaskEditFocus::Description,
             task_edit_buffer: String::new(),
+            selected_date: now.date_naive(),
         }
     }
 }

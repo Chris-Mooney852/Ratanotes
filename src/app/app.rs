@@ -1,7 +1,7 @@
 use crate::app::state::{AppState, Mode, Note, View};
 use crate::app::ui::ui;
 use crate::utils::data_handler::DataHandler;
-use chrono::{NaiveDate, Utc};
+use chrono::{Datelike, Duration, NaiveDate, Utc};
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
@@ -32,6 +32,11 @@ pub enum Message {
     SwitchToTasks,
     PreviousMonth,
     NextMonth,
+    NextDay,
+    PreviousDay,
+    NextWeek,
+    PreviousWeek,
+    OpenDailyNote,
     Save,
     Char(char),
     Backspace,
@@ -401,8 +406,13 @@ impl App {
                         _ => {}
                     },
                     View::Calendar => match key.code {
-                        KeyCode::Left => return Ok(Some(Message::PreviousMonth)),
-                        KeyCode::Right => return Ok(Some(Message::NextMonth)),
+                        KeyCode::Left => return Ok(Some(Message::PreviousDay)),
+                        KeyCode::Right => return Ok(Some(Message::NextDay)),
+                        KeyCode::Up => return Ok(Some(Message::PreviousWeek)),
+                        KeyCode::Down => return Ok(Some(Message::NextWeek)),
+                        KeyCode::Enter => return Ok(Some(Message::OpenDailyNote)),
+                        KeyCode::Char('h') => return Ok(Some(Message::PreviousMonth)),
+                        KeyCode::Char('l') => return Ok(Some(Message::NextMonth)),
                         _ => {}
                     },
                     View::Tasks => match key.code {
@@ -465,6 +475,66 @@ impl App {
                     self.state.calendar_year += 1;
                 } else {
                     self.state.calendar_month += 1;
+                }
+            }
+            Message::NextDay => {
+                self.state.selected_date += Duration::days(1);
+                self.state.calendar_year = self.state.selected_date.year();
+                self.state.calendar_month = self.state.selected_date.month();
+            }
+            Message::PreviousDay => {
+                self.state.selected_date -= Duration::days(1);
+                self.state.calendar_year = self.state.selected_date.year();
+                self.state.calendar_month = self.state.selected_date.month();
+            }
+            Message::NextWeek => {
+                self.state.selected_date += Duration::weeks(1);
+                self.state.calendar_year = self.state.selected_date.year();
+                self.state.calendar_month = self.state.selected_date.month();
+            }
+            Message::PreviousWeek => {
+                self.state.selected_date -= Duration::weeks(1);
+                self.state.calendar_year = self.state.selected_date.year();
+                self.state.calendar_month = self.state.selected_date.month();
+            }
+            Message::OpenDailyNote => {
+                let date = self.state.selected_date;
+                let filename = date.format("%d-%m-%Y.md").to_string();
+                let daily_note_path = self
+                    .data_handler
+                    .notes_dir
+                    .join("daily-notes")
+                    .join(&filename);
+
+                if let Some(note_index) = self
+                    .state
+                    .notes
+                    .iter()
+                    .position(|n| n.path == daily_note_path)
+                {
+                    // Note exists, open it
+                    self.state.note_list_state.select(Some(note_index));
+                    self.state.current_view = View::NoteEditor;
+                    self.state.mode = Mode::Normal;
+                    self.state.cursor_offset = 0;
+                } else {
+                    // Note doesn't exist, create it
+                    let new_note = Note {
+                        path: daily_note_path,
+                        title: date.format("%A, %d %B %Y").to_string(),
+                        content: String::new(),
+                        tags: vec!["daily".to_string()],
+                        created_at: Utc::now(),
+                        updated_at: Utc::now(),
+                    };
+                    self.state.notes.push(new_note);
+                    self.update_tags();
+                    let new_note_index = self.state.notes.len() - 1;
+                    self.state.note_list_state.select(Some(new_note_index));
+                    self.state.current_view = View::NoteEditor;
+                    self.state.mode = Mode::Insert;
+                    self.state.dirty = true;
+                    self.state.cursor_offset = 0;
                 }
             }
             Message::Save => {

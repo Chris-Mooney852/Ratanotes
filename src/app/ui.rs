@@ -91,6 +91,7 @@ pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>)
                 year: app.state.calendar_year,
                 month: app.state.calendar_month,
                 notes: &app.state.notes,
+                selected_date: app.state.selected_date,
             };
             frame.render_widget(calendar, content_area);
         }
