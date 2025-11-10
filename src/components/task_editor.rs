@@ -85,13 +85,13 @@ impl<'a> Widget for TaskEditorWidget<'a> {
         } else {
             self.task
                 .due_date
-                .map(|d| d.format("%Y-%m-%d").to_string())
+                .map(|d| d.format("%d-%m-%Y").to_string())
                 .unwrap_or_else(|| "".to_string())
         };
 
         let due_date_p = Paragraph::new(due_date_text).block(
             Block::default()
-                .title("Due Date (YYYY-MM-DD)")
+                .title("Due Date (DD-MM-YYYY)")
                 .borders(Borders::ALL)
                 .border_style(due_date_border_style),
         );

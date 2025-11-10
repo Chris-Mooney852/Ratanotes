@@ -1012,12 +1012,12 @@ impl App {
                                 if buffer.is_empty() {
                                     task.due_date = None;
                                 } else if let Ok(date) =
-                                    NaiveDate::parse_from_str(buffer, "%Y-%m-%d")
+                                    NaiveDate::parse_from_str(buffer, "%d-%m-%Y")
                                 {
                                     task.due_date = Some(date);
                                 } else {
                                     self.state.status_message =
-                                        "Invalid date format (YYYY-MM-DD)".to_string();
+                                        "Invalid date format (DD-MM-YYYY)".to_string();
                                 }
                             }
                             _ => {}
@@ -1041,12 +1041,12 @@ impl App {
                                 if buffer.is_empty() {
                                     task.due_date = None;
                                 } else if let Ok(date) =
-                                    NaiveDate::parse_from_str(buffer, "%Y-%m-%d")
+                                    NaiveDate::parse_from_str(buffer, "%d-%m-%Y")
                                 {
                                     task.due_date = Some(date);
                                 } else {
                                     self.state.status_message =
-                                        "Invalid date format (YYYY-MM-DD)".to_string();
+                                        "Invalid date format (DD-MM-YYYY)".to_string();
                                 }
                             }
                             _ => {}
@@ -1061,7 +1061,7 @@ impl App {
                             crate::app::state::TaskEditFocus::Priority => {
                                 self.state.task_edit_buffer = task
                                     .due_date
-                                    .map(|d| d.format("%Y-%m-%d").to_string())
+                                    .map(|d| d.format("%d-%m-%Y").to_string())
                                     .unwrap_or_default();
                                 crate::app::state::TaskEditFocus::DueDate
                             }

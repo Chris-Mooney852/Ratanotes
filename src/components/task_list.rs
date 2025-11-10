@@ -20,7 +20,7 @@ impl<'a> StatefulWidget for TaskListWidget<'a> {
                 let priority = format!("[{:?}]", task.priority);
                 let due_date = task
                     .due_date
-                    .map(|d| d.format(" (%Y-%m-%d)").to_string())
+                    .map(|d| d.format(" (%d-%m-%Y)").to_string())
                     .unwrap_or_default();
 
                 let line = format!(

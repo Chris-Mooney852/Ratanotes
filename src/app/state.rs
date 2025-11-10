@@ -127,7 +127,7 @@ impl AppState {
 
         let now = Local::now();
 
-        let daily_note_filename = now.format("%Y-%m-%d.md").to_string();
+        let daily_note_filename = now.format("%d-%m-%Y.md").to_string();
         let daily_note = Note {
             path: PathBuf::from(daily_note_filename),
             title: "Daily Note for today".to_string(),

@@ -58,7 +58,7 @@ impl<'a> Widget for CalendarWidget<'a> {
             .filter_map(|note| {
                 if let Some(file_name) = note.path.file_stem() {
                     if let Some(file_name_str) = file_name.to_str() {
-                        if let Ok(date) = NaiveDate::parse_from_str(file_name_str, "%Y-%m-%d") {
+                        if let Ok(date) = NaiveDate::parse_from_str(file_name_str, "%d-%m-%Y") {
                             if date.year() == self.year && date.month() == self.month {
                                 return Some(date.day());
                             }
