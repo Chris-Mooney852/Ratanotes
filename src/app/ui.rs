@@ -1,8 +1,8 @@
 use crate::app::app::{App, Focus};
 use crate::components::{
-    calendar::CalendarWidget, help::HelpWidget, note_editor::NoteEditorWidget,
-    note_list::NoteListWidget, status_bar::StatusBarWidget, tag_list::TagListWidget,
-    task_editor::TaskEditorWidget, task_list::TaskListWidget,
+    calendar::CalendarWidget, command_bar::CommandBarWidget, help::HelpWidget,
+    note_editor::NoteEditorWidget, note_list::NoteListWidget, status_bar::StatusBarWidget,
+    tag_list::TagListWidget, task_editor::TaskEditorWidget, task_list::TaskListWidget,
 };
 use ratatui::{
     prelude::*,
@@ -15,11 +15,19 @@ use super::state::AppState;
 pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .constraints(
+            [
+                Constraint::Min(0),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ]
+            .as_ref(),
+        )
         .split(frame.size());
 
     let content_area = main_layout[0];
-    let status_bar_area = main_layout[1];
+    let command_bar_area = main_layout[1];
+    let status_bar_area = main_layout[2];
 
     // Render the main content based on the current view
     match app.state.current_view {
@@ -114,6 +122,12 @@ pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>)
             frame.render_widget(help_widget, content_area);
         }
     };
+
+    // Render Command Bar
+    let command_bar = CommandBarWidget {
+        text: &app.state.input_buffer,
+    };
+    frame.render_widget(command_bar, command_bar_area);
 
     // Render the status bar
     let status_bar = StatusBarWidget {

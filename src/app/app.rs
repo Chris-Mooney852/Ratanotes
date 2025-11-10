@@ -496,14 +496,14 @@ impl App {
                 self.state.mode = Mode::Normal;
                 self.state.status_message = "".to_string();
                 self.state.command_input.clear();
+                self.state.input_buffer.clear();
             }
             Message::EnterCommandMode => {
                 self.state.mode = Mode::Command;
-                self.state.command_input.push(':');
-                self.state.status_message = self.state.command_input.clone();
+                self.state.input_buffer.push(':');
             }
             Message::ExecuteCommand => {
-                let command = self.state.command_input.drain(1..).collect::<String>();
+                let command = self.state.input_buffer.drain(1..).collect::<String>();
                 match command.as_str() {
                     "w" | "write" => self.update(Message::Save),
                     "q" | "quit" => self.update(Message::Quit),
@@ -539,8 +539,7 @@ impl App {
                     }
                 }
                 Mode::Command => {
-                    self.state.command_input.push(c);
-                    self.state.status_message = self.state.command_input.clone();
+                    self.state.input_buffer.push(c);
                 }
                 Mode::TitleInput => {
                     let prefix = if self.state.note_list_state.selected().is_none() {
@@ -549,17 +548,17 @@ impl App {
                         "Rename note to: "
                     };
                     self.state.command_input.push(c);
-                    self.state.status_message = format!("{}{}", prefix, self.state.command_input);
+                    self.state.input_buffer = format!("{}{}", prefix, self.state.command_input);
                 }
                 Mode::TagInput => {
                     self.state.command_input.push(c);
-                    self.state.status_message = format!("Add Tag: {}", self.state.command_input);
+                    self.state.input_buffer = format!("Add Tag: {}", self.state.command_input);
                 }
                 Mode::Normal => {
                     if let View::Search = self.state.current_view {
                         self.state.search_query.push(c);
                         self.update_search_results();
-                        self.state.status_message = format!("/{}", self.state.search_query);
+                        self.state.input_buffer = format!("/{}", self.state.search_query);
                     }
                 }
                 Mode::ConfirmDeletion => {}
@@ -589,11 +588,9 @@ impl App {
                     }
                 }
                 Mode::Command => {
-                    self.state.command_input.pop();
-                    if self.state.command_input.is_empty() {
+                    self.state.input_buffer.pop();
+                    if self.state.input_buffer.is_empty() {
                         self.update(Message::EnterNormalMode);
-                    } else {
-                        self.state.status_message = self.state.command_input.clone();
                     }
                 }
                 Mode::TitleInput => {
@@ -603,17 +600,17 @@ impl App {
                         "Rename note to: "
                     };
                     self.state.command_input.pop();
-                    self.state.status_message = format!("{}{}", prefix, self.state.command_input);
+                    self.state.input_buffer = format!("{}{}", prefix, self.state.command_input);
                 }
                 Mode::TagInput => {
                     self.state.command_input.pop();
-                    self.state.status_message = format!("Add Tag: {}", self.state.command_input);
+                    self.state.input_buffer = format!("Add Tag: {}", self.state.command_input);
                 }
                 Mode::Normal => {
                     if let View::Search = self.state.current_view {
                         self.state.search_query.pop();
                         self.update_search_results();
-                        self.state.status_message = format!("/{}", self.state.search_query);
+                        self.state.input_buffer = format!("/{}", self.state.search_query);
                     }
                 }
                 Mode::ConfirmDeletion => {}
@@ -630,7 +627,7 @@ impl App {
             Message::EnterSearch => {
                 self.state.current_view = View::Search;
                 self.state.search_query.clear();
-                self.state.status_message = "/".to_string();
+                self.state.input_buffer = "/".to_string();
                 self.update_search_results();
             }
             Message::ExitSearch => {
@@ -672,20 +669,20 @@ impl App {
                 self.state.note_list_state.select(None); // Deselect to indicate new note
                 self.state.mode = Mode::TitleInput;
                 self.state.command_input.clear();
-                self.state.status_message = "New note title: ".to_string();
+                self.state.input_buffer = "New note title: ".to_string();
             }
             Message::NewTask => {
                 self.state.task_list_state.select(None);
                 self.state.mode = Mode::TitleInput;
                 self.state.command_input.clear();
-                self.state.status_message = "New Task: ".to_string();
+                self.state.input_buffer = "New Task: ".to_string();
             }
             Message::RenameNote => {
                 if let Some(index) = self.state.note_list_state.selected() {
                     if let Some(note) = self.state.notes.get(index) {
                         self.state.mode = Mode::TitleInput;
                         self.state.command_input = note.title.clone();
-                        self.state.status_message =
+                        self.state.input_buffer =
                             format!("Rename note to: {}", self.state.command_input);
                     }
                 }
@@ -837,7 +834,7 @@ impl App {
             Message::EnterTagInput => {
                 self.state.mode = Mode::TagInput;
                 self.state.command_input.clear();
-                self.state.status_message = "Add Tag: ".to_string();
+                self.state.input_buffer = "Add Tag: ".to_string();
             }
             Message::AddTag => {
                 let new_tag = self.state.command_input.trim().to_string();
