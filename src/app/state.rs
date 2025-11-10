@@ -31,8 +31,6 @@ pub struct Note {
     pub title: String,
     pub content: String,
     pub tags: Vec<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
 /// Represents the current active view of the application.
@@ -101,8 +99,6 @@ impl AppState {
             title: "Sample Note".to_string(),
             content: "This is the content of the sample note.".to_string(),
             tags: vec!["sample".to_string(), "rust".to_string()],
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
         };
 
         let sample_tasks = vec![
@@ -136,8 +132,6 @@ impl AppState {
             title: "Daily Note for today".to_string(),
             content: "This is a sample daily note for today.".to_string(),
             tags: vec!["daily".to_string()],
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
         };
 
         let notes = vec![sample_note, daily_note];

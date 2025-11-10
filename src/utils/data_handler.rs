@@ -1,7 +1,7 @@
 // Ratanotes/src/utils/data_handler.rs
 
 use crate::app::state::{Note, Task};
-use chrono::{DateTime, Utc};
+
 use glob::glob;
 use serde_yaml;
 use std::{
@@ -64,10 +64,6 @@ impl DataHandler {
         let mut full_content = String::new();
         file.read_to_string(&mut full_content)?;
 
-        let metadata = fs::metadata(path)?;
-        let created_at: DateTime<Utc> = metadata.created()?.into();
-        let updated_at: DateTime<Utc> = metadata.modified()?.into();
-
         let (tags, title, content_body) = self.parse_file_parts(&full_content);
 
         let final_title = if !title.is_empty() {
@@ -84,8 +80,6 @@ impl DataHandler {
             title: final_title,
             content: content_body.to_string(),
             tags,
-            created_at,
-            updated_at,
         })
     }
 

@@ -9,8 +9,6 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
-use super::state::AppState;
-
 /// Renders the user interface.
 pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>) {
     let main_layout = Layout::default()

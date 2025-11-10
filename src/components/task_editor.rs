@@ -1,6 +1,6 @@
 // Ratanotes/src/components/task_editor.rs
 
-use crate::app::state::{Priority, Task, TaskEditFocus};
+use crate::app::state::{Task, TaskEditFocus};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, Paragraph},

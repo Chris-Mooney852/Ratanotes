@@ -3,9 +3,7 @@ use crate::app::ui::ui;
 use crate::utils::data_handler::DataHandler;
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
-    },
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -13,10 +11,7 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
-use std::{
-    io::{self, Result},
-    path::PathBuf,
-};
+use std::io::{self, Result};
 
 pub enum Focus {
     NoteList,
@@ -524,8 +519,6 @@ impl App {
                         title: date.format("%A, %d %B %Y").to_string(),
                         content: String::new(),
                         tags: vec!["daily".to_string()],
-                        created_at: Utc::now(),
-                        updated_at: Utc::now(),
                     };
                     self.state.notes.push(new_note);
                     self.update_tags();
@@ -792,8 +785,6 @@ impl App {
                                 title: new_title,
                                 content: String::new(),
                                 tags: vec![],
-                                created_at: Utc::now(),
-                                updated_at: Utc::now(),
                             };
 
                             self.state.notes.push(new_note);
