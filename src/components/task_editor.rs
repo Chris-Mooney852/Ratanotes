@@ -14,7 +14,7 @@ pub struct TaskEditorWidget<'a> {
 
 impl<'a> Widget for TaskEditorWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup_area = centered_rect(60, 30, area);
+        let popup_area = centered_rect(60, 40, area);
 
         // Clear the area behind the popup before rendering
         Clear.render(popup_area, buf);
@@ -32,6 +32,7 @@ impl<'a> Widget for TaskEditorWidget<'a> {
                     Constraint::Length(3),
                     Constraint::Length(3),
                     Constraint::Length(3),
+                    Constraint::Length(3),
                 ]
                 .as_ref(),
             )
@@ -46,7 +47,12 @@ impl<'a> Widget for TaskEditorWidget<'a> {
             Style::default()
         };
 
-        let description_p = Paragraph::new(self.edit_buffer).block(
+        let description_text = if let TaskEditFocus::Description = self.focus {
+            self.edit_buffer
+        } else {
+            &self.task.description
+        };
+        let description_p = Paragraph::new(description_text).block(
             Block::default()
                 .title("Description")
                 .borders(Borders::ALL)
@@ -96,6 +102,27 @@ impl<'a> Widget for TaskEditorWidget<'a> {
                 .border_style(due_date_border_style),
         );
         due_date_p.render(editor_layout[2], buf);
+
+        // -- Project Field --
+        let project_border_style = if let TaskEditFocus::Project = self.focus {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default()
+        };
+
+        let project_text = if let TaskEditFocus::Project = self.focus {
+            self.edit_buffer.to_string()
+        } else {
+            self.task.project.clone().unwrap_or_default()
+        };
+
+        let project_p = Paragraph::new(project_text).block(
+            Block::default()
+                .title("Project")
+                .borders(Borders::ALL)
+                .border_style(project_border_style),
+        );
+        project_p.render(editor_layout[3], buf);
     }
 }
 

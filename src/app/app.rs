@@ -114,6 +114,7 @@ impl App {
             focus: Focus::NoteList,
         };
         app.update_tags();
+        app.sort_tasks();
         app
     }
 
@@ -217,9 +218,30 @@ impl App {
 
     /// Saves the tasks to disk and updates the status message on failure.
     fn save_tasks(&mut self) {
+        self.sort_tasks();
         if let Err(e) = self.data_handler.save_tasks(&self.state.tasks) {
             self.state.status_message = format!("Error auto-saving tasks: {}", e);
         }
+    }
+
+    /// Sorts tasks by due date (ascending, None last) and then by priority (descending).
+    fn sort_tasks(&mut self) {
+        self.state.tasks.sort_by(|a, b| {
+            // Sort by due date first (ascending, with None at the end)
+            let date_ordering = match (a.due_date, b.due_date) {
+                (Some(date_a), Some(date_b)) => date_a.cmp(&date_b),
+                (Some(_), None) => std::cmp::Ordering::Less, // Tasks with due dates come first
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            };
+
+            if date_ordering != std::cmp::Ordering::Equal {
+                return date_ordering;
+            }
+
+            // If due dates are equal (or both are None), sort by priority (descending)
+            b.priority.cmp(&a.priority)
+        });
     }
 
     fn handle_events(&self) -> Result<Option<Message>> {
@@ -302,6 +324,13 @@ impl App {
                                 _ => Ok(None),
                             },
                             crate::app::state::TaskEditFocus::DueDate => match key.code {
+                                KeyCode::Esc => Ok(Some(Message::ExitEditTask)),
+                                KeyCode::Tab => Ok(Some(Message::SwitchTaskEditFocus)),
+                                KeyCode::Char(c) => Ok(Some(Message::Char(c))),
+                                KeyCode::Backspace => Ok(Some(Message::Backspace)),
+                                _ => Ok(None),
+                            },
+                            crate::app::state::TaskEditFocus::Project => match key.code {
                                 KeyCode::Esc => Ok(Some(Message::ExitEditTask)),
                                 KeyCode::Tab => Ok(Some(Message::SwitchTaskEditFocus)),
                                 KeyCode::Char(c) => Ok(Some(Message::Char(c))),
@@ -537,7 +566,8 @@ impl App {
                 Mode::ConfirmQuit => {}
                 Mode::EditTask => {
                     if let crate::app::state::TaskEditFocus::Description
-                    | crate::app::state::TaskEditFocus::DueDate = self.state.task_edit_focus
+                    | crate::app::state::TaskEditFocus::DueDate
+                    | crate::app::state::TaskEditFocus::Project = self.state.task_edit_focus
                     {
                         self.state.task_edit_buffer.push(c);
                     }
@@ -590,7 +620,8 @@ impl App {
                 Mode::ConfirmQuit => {}
                 Mode::EditTask => {
                     if let crate::app::state::TaskEditFocus::Description
-                    | crate::app::state::TaskEditFocus::DueDate = self.state.task_edit_focus
+                    | crate::app::state::TaskEditFocus::DueDate
+                    | crate::app::state::TaskEditFocus::Project = self.state.task_edit_focus
                     {
                         self.state.task_edit_buffer.pop();
                     }
@@ -1020,6 +1051,14 @@ impl App {
                                         "Invalid date format (DD-MM-YYYY)".to_string();
                                 }
                             }
+                            crate::app::state::TaskEditFocus::Project => {
+                                let buffer = self.state.task_edit_buffer.trim();
+                                if buffer.is_empty() {
+                                    task.project = None;
+                                } else {
+                                    task.project = Some(buffer.to_string());
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -1049,6 +1088,14 @@ impl App {
                                         "Invalid date format (DD-MM-YYYY)".to_string();
                                 }
                             }
+                            crate::app::state::TaskEditFocus::Project => {
+                                let buffer = self.state.task_edit_buffer.trim();
+                                if buffer.is_empty() {
+                                    task.project = None;
+                                } else {
+                                    task.project = Some(buffer.to_string());
+                                }
+                            }
                             _ => {}
                         }
 
@@ -1066,6 +1113,11 @@ impl App {
                                 crate::app::state::TaskEditFocus::DueDate
                             }
                             crate::app::state::TaskEditFocus::DueDate => {
+                                self.state.task_edit_buffer =
+                                    task.project.clone().unwrap_or_default();
+                                crate::app::state::TaskEditFocus::Project
+                            }
+                            crate::app::state::TaskEditFocus::Project => {
                                 self.state.task_edit_buffer = task.description.clone();
                                 crate::app::state::TaskEditFocus::Description
                             }

@@ -63,6 +63,7 @@ pub enum TaskEditFocus {
     Description,
     Priority,
     DueDate,
+    Project,
 }
 
 /// The main application state.
