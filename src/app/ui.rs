@@ -1,12 +1,12 @@
 use crate::app::app::{App, Focus};
 use crate::components::{
     calendar::CalendarWidget, command_bar::CommandBarWidget, help::HelpWidget,
-    note_editor::NoteEditorWidget, note_list::NoteListWidget, status_bar::StatusBarWidget,
+    note_list::NoteListWidget, status_bar::StatusBarWidget,
     tag_list::TagListWidget, task_editor::TaskEditorWidget, task_list::TaskListWidget,
 };
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem},
 };
 
 /// Renders the user interface.
@@ -61,28 +61,6 @@ pub fn ui(frame: &mut Frame, app: &mut App, cursor_position: Option<(u16, u16)>)
                 active_tag: &app.state.active_tag,
             };
             frame.render_stateful_widget(tag_list, chunks[1], &mut app.state.tag_list_state);
-        }
-        super::state::View::NoteEditor => {
-            if let Some(selected_index) = app.state.note_list_state.selected() {
-                if let Some(note) = app.state.notes.get(selected_index) {
-                    let note_editor = NoteEditorWidget {
-                        note,
-                        mode: &app.state.mode,
-                    };
-                    frame.render_widget(note_editor, content_area);
-                    if let Some((cursor_x, cursor_y)) = cursor_position {
-                        // Position the cursor. The text area is inside the block's borders.
-                        frame.set_cursor(
-                            content_area.x + 1 + cursor_x,
-                            content_area.y + 1 + cursor_y,
-                        );
-                    }
-                }
-            } else {
-                let placeholder = Paragraph::new("No note selected.")
-                    .block(Block::default().title("Notes").borders(Borders::ALL));
-                frame.render_widget(placeholder, content_area);
-            }
         }
         super::state::View::Calendar => {
             let calendar = CalendarWidget {

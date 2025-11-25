@@ -37,7 +37,6 @@ pub struct Note {
 #[derive(Clone, Debug)]
 pub enum View {
     NoteList,
-    NoteEditor,
     Calendar,
     Tasks,
     Search,
@@ -89,6 +88,7 @@ pub struct AppState {
     pub task_edit_focus: TaskEditFocus,
     pub task_edit_buffer: String,
     pub selected_date: NaiveDate,
+    pub open_in_editor: Option<PathBuf>,
 }
 
 impl AppState {
@@ -175,6 +175,7 @@ impl AppState {
             task_edit_focus: TaskEditFocus::Description,
             task_edit_buffer: String::new(),
             selected_date: now.date_naive(),
+            open_in_editor: None,
         }
     }
 }

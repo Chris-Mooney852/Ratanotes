@@ -59,7 +59,7 @@ impl DataHandler {
     }
 
     /// Parses a single note file.
-    fn parse_note(&self, path: &Path) -> Result<Note, std::io::Error> {
+    pub fn parse_note(&self, path: &Path) -> Result<Note, std::io::Error> {
         let mut file = File::open(path)?;
         let mut full_content = String::new();
         file.read_to_string(&mut full_content)?;
@@ -132,27 +132,33 @@ impl DataHandler {
         Ok(())
     }
 
+    /// Saves a single note to the filesystem.
+    pub fn save_note(&self, note: &Note) -> Result<(), std::io::Error> {
+        let mut file = File::create(&note.path)?;
+        let mut full_content = String::new();
+
+        // Front matter
+        full_content.push_str("---\n");
+        full_content.push_str(&format!("title: {}\n", note.title));
+        if !note.tags.is_empty() {
+            full_content.push_str("tags:\n");
+            for tag in &note.tags {
+                full_content.push_str(&format!("  - {}\n", tag));
+            }
+        }
+        full_content.push_str("---\n\n");
+
+        // Content
+        full_content.push_str(&note.content);
+
+        file.write_all(full_content.as_bytes())?;
+        Ok(())
+    }
+
     /// Saves all notes to the filesystem.
     pub fn save_notes(&self, notes: &[Note]) -> Result<(), std::io::Error> {
         for note in notes {
-            let mut file = File::create(&note.path)?;
-            let mut full_content = String::new();
-
-            // Front matter
-            full_content.push_str("---\n");
-            full_content.push_str(&format!("title: {}\n", note.title));
-            if !note.tags.is_empty() {
-                full_content.push_str("tags:\n");
-                for tag in &note.tags {
-                    full_content.push_str(&format!("  - {}\n", tag));
-                }
-            }
-            full_content.push_str("---\n\n");
-
-            // Content
-            full_content.push_str(&note.content);
-
-            file.write_all(full_content.as_bytes())?;
+            self.save_note(note)?;
         }
         Ok(())
     }

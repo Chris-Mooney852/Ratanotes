@@ -7,10 +7,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{
-    Terminal,
-    backend::{Backend, CrosstermBackend},
-};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::{self, Result};
 
 pub enum Focus {
@@ -119,7 +116,7 @@ impl App {
     }
 
     /// Runs the application's main loop.
-    pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
+    pub fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         while self.state.running {
             // Draw the UI
             let cursor_position = if let Mode::Insert = self.state.mode {
@@ -145,6 +142,19 @@ impl App {
             if let Some(message) = self.handle_events()? {
                 // Update the state
                 self.update(message);
+            }
+
+            if let Some(path) = self.state.open_in_editor.take() {
+                restore_terminal(terminal)?;
+                let _ = std::process::Command::new("nvim").arg(&path).status();
+                *terminal = setup_terminal()?;
+                if let Ok(updated_note) = self.data_handler.parse_note(&path) {
+                    if let Some(index) = self.state.notes.iter().position(|n| n.path == path) {
+                        self.state.notes[index] = updated_note;
+                        self.update_tags();
+                    }
+                }
+                terminal.clear()?;
             }
         }
         Ok(())
@@ -393,13 +403,6 @@ impl App {
                             },
                         }
                     }
-                    View::NoteEditor => match key.code {
-                        KeyCode::Char('t') => return Ok(Some(Message::EnterTagInput)),
-                        KeyCode::Char('i') => return Ok(Some(Message::EnterInsertMode)),
-                        KeyCode::Char('r') => return Ok(Some(Message::RenameNote)),
-                        KeyCode::Esc => return Ok(Some(Message::SwitchToNoteList)),
-                        _ => {}
-                    },
                     View::Calendar => match key.code {
                         KeyCode::Left => return Ok(Some(Message::PreviousDay)),
                         KeyCode::Right => return Ok(Some(Message::NextDay)),
@@ -507,11 +510,10 @@ impl App {
                     .iter()
                     .position(|n| n.path == daily_note_path)
                 {
-                    // Note exists, open it
                     self.state.note_list_state.select(Some(note_index));
-                    self.state.current_view = View::NoteEditor;
-                    self.state.mode = Mode::Normal;
-                    self.state.cursor_offset = 0;
+                    if let Some(note) = self.state.notes.get(note_index) {
+                        self.state.open_in_editor = Some(note.path.clone());
+                    }
                 } else {
                     // Note doesn't exist, create it
                     let new_note = Note {
@@ -524,10 +526,12 @@ impl App {
                     self.update_tags();
                     let new_note_index = self.state.notes.len() - 1;
                     self.state.note_list_state.select(Some(new_note_index));
-                    self.state.current_view = View::NoteEditor;
-                    self.state.mode = Mode::Insert;
-                    self.state.dirty = true;
-                    self.state.cursor_offset = 0;
+                    if let Some(note) = self.state.notes.last() {
+                        self.state.open_in_editor = Some(note.path.clone());
+                        if let Err(e) = self.data_handler.save_note(note) {
+                            self.state.status_message = format!("Error saving note: {}", e);
+                        }
+                    }
                 }
             }
             Message::Save => {
@@ -722,10 +726,10 @@ impl App {
                 }
             }
             Message::OpenNote => {
-                if self.state.note_list_state.selected().is_some() {
-                    self.state.cursor_offset = 0;
-                    self.state.current_view = View::NoteEditor;
-                    self.state.status_message = "".to_string();
+                if let Some(index) = self.state.note_list_state.selected() {
+                    if let Some(note) = self.state.notes.get(index) {
+                        self.state.open_in_editor = Some(note.path.clone());
+                    }
                 }
             }
             Message::NewNote => {
@@ -759,7 +763,7 @@ impl App {
                 }
 
                 match self.state.current_view {
-                    View::NoteList | View::NoteEditor => {
+                    View::NoteList => {
                         let new_title = input;
                         if let Some(index) = self.state.note_list_state.selected() {
                             // This is a rename of an existing note
@@ -790,10 +794,13 @@ impl App {
                             self.state.notes.push(new_note);
                             let new_note_index = self.state.notes.len() - 1;
                             self.state.note_list_state.select(Some(new_note_index));
-                            self.state.current_view = View::NoteEditor;
-                            self.state.mode = Mode::Insert;
-                            self.state.status_message = "-- INSERT --".to_string();
-                            return; // Skip returning to normal mode
+                            if let Some(note) = self.state.notes.last() {
+                                self.state.open_in_editor = Some(note.path.clone());
+                                if let Err(e) = self.data_handler.save_note(note) {
+                                    self.state.status_message = format!("Error saving note: {}", e);
+                                }
+                            }
+                            return;
                         }
                     }
                     View::Tasks => {

@@ -55,7 +55,6 @@ The `Main Application` component is the entry point and core of Ratanotes. It is
 
 The UI will be composed of several reusable components, each responsible for rendering a specific part of the application.
 
-- **Note Editor**: A text area for creating and editing Markdown notes. It should support basic text editing features and potentially syntax highlighting.
 - **Calendar View**: A component that displays a calendar for the current month. Days with notes will be visually distinct. Users can navigate between months and select a day to open the corresponding daily note.
 - **Task List**: A list that displays tasks with their due date and priority. It will provide functionality to sort and filter the tasks.
 - **Search Input**: An input field for entering search queries. This could be part of a larger search view that displays results.
@@ -207,18 +206,17 @@ struct Task {
 This section describes the key user interactions and workflows within the application. The keybindings are designed to be familiar to Vim users.
 
 ### 6.1. General Navigation
-- **`<Tab>`**: Move focus between different UI components (e.g., from the note list to the note editor).
+- **`<Tab>`**: Move focus between different UI components (e.g., from the note list to the task list).
 - **`<Shift+Tab>`**: Move focus in the reverse direction.
 - **`q`**: Quit the application or go back from a specific view/mode.
 
 ### 6.2. Creating a New Note
 1. From the main note view, the user presses `a`.
-2. A new, empty buffer is opened in the note editor component.
-3. The user writes the note content using Markdown.
-4. The user presses `:w` (or a similar save command) to save the note.
-5. The application prompts for a filename.
-6. After entering a filename, the note is saved to the filesystem in the `notes/` directory.
-7. The note list is updated to include the new note.
+2. The application prompts for a filename.
+3. After entering a filename, the note is created in the `notes/` directory.
+4. The application opens the new note in Neovim.
+5. The user writes the note content using Markdown and saves/quits Neovim.
+6. The application resumes and the note list is updated to include the new note.
 
 ### 6.3. Searching for a Note
 1. The user presses `/` to enter search mode.
@@ -237,7 +235,7 @@ This section describes the key user interactions and workflows within the applic
 1. The user navigates to the Calendar view (e.g., by pressing `c`).
 2. The current month is displayed. Days with existing notes are highlighted.
 3. The user can use the arrow keys (`←`, `→`, `↑`, `↓`) to navigate between days.
-4. Pressing `<Enter>` on a selected day opens the corresponding daily note in the editor. If no note exists, a new one is created for that day.
+4. Pressing `<Enter>` on a selected day opens the corresponding daily note in Neovim. If no note exists, a new one is created for that day before opening.
 
 ### 6.6. Adding a New Task
 1. The user navigates to the Tasks view (e.g., by pressing `T`).
